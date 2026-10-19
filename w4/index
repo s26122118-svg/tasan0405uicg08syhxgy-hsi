@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>朋友對我的動態留言板</title>
+  
+  <!-- 載入 Google Fonts 精緻字體：Noto Serif TC (襯線體) & Noto Sans TC (無襯線體) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet">
+
+  <!-- CSS 樣式區塊 -->
+  <style>
+    /* ==========================================
+       1. 全局變數定義 (字體、顏色與時間設定)
+       ========================================== */
+    :root {
+      /* 字體設定區 (可隨時調整順序) */
+      --font-title: 'Noto Serif TC', "Songti TC", Georgia, serif;         /* 標題與姓名：典雅襯線體 */
+      --font-body: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif; /* 內文與時間：清晰無襯線體 */
+
+      /* 米白色系背景 */
+      --bg-color: #fdfbf7;           /* 主頁面米白背景 */
+      --card-bg: #ffffff;            /* 卡片純白背景 */
+      
+      /* 文字顏色 */
+      --text-primary: #3d342f;       /* 主要文字 (深暖棕，比純黑更溫和) */
+      --text-secondary: #8c7b70;     /* 次要文字 (淡暖棕) */
+      
+      /* 高亮與裝飾顏色 */
+      --accent-color: #d4a373;       /* 強調色 (大地金棕) */
+      --highlight-glow: rgba(212, 163, 115, 0.35); /* 高亮時的發光顏色 */
+      --border-color: #f0e6df;       /* 一般邊框顏色 */
+      
+      /* 卡片未選中時的暗化與模糊程度 */
+      --dim-opacity: 0.35;           /* 非高亮卡片的透明度 (0.1 ~ 1.0) */
+      --dim-blur: 2.5px;             /* 非高亮卡片的模糊度 (px) */
+    }
+
+    /* 基礎重置與排版 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-primary);
+      font-family: var(--font-body); /* 預設全頁使用無襯線字體 */
+      min-height: 100vh;
+      padding: 3rem 1.5rem;
+      -webkit-font-smoothing: antialiased; /* 字體邊緣平滑化 */
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    header h1 {
+      font-family: var(--font-title); /* 主標題採用襯線體 */
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 3px;            /* 加寬字距，營造文藝展覽感 */
+      margin-bottom: 0.6rem;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+    }
+
+    header p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      letter-spacing: 1.5px;
+      font-weight: 400;
+    }
+
+    /* ==========================================
+       2. 酷炫載入動畫 (Loading Screen)
+       ========================================== */
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem 0;
+    }
+
+    .spinner {
+      position: relative;
+      width: 60px;
+      height: 60px;
+      margin-bottom: 1.5rem;
+    }
+
+    .spinner::before, .spinner::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .spinner::before {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: 4px solid transparent;
+      border-top-color: var(--accent-color);
+      border-bottom-color: var(--accent-color);
+      animation: spin 1.5s linear infinite;
+    }
+
+    .spinner::after {
+      top: 10px;
+      left: 10px;
+      width: 40px;
+      height: 40px;
+      border: 4px solid transparent;
+      border-left-color: var(--text-secondary);
+      border-right-color: var(--text-secondary);
+      animation: spin-reverse 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes spin-reverse {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(-360deg); }
+    }
+
+    #loading p {
+      color: var(--text-secondary);
+      font-size: 1rem;
+      letter-spacing: 2px;
+      font-family: var(--font-title);
+      animation: pulse 1.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+
+    /* ==========================================
+       3. CSS 瀑布流排版 (Masonry Layout)
+       ========================================== */
+    .masonry-container {
+      column-count: 1;
+      column-gap: 1.8rem;
+      max-width: 1100px;
+      margin: 0 auto;
+      opacity: 1;
+      transition: opacity 0.5s ease;
+    }
+
+    @media (min-width: 600px) {
+      .masonry-container {
+        column-count: 2;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .masonry-container {
+        column-count: 3;
+      }
+    }
+
+    /* ==========================================
+       4. 留言卡片與輪播高亮樣式
+       ========================================== */
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 1.6rem;
+      margin-bottom: 1.8rem;
+      break-inside: avoid;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.02);
+      
+      /* 動畫過渡設定 */
+      transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1),
+                  box-shadow 0.6s ease,
+                  border-color 0.6s ease,
+                  opacity 0.6s ease,
+                  filter 0.6s ease;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 1rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px dashed var(--border-color);
+    }
+
+    /* 名字字體：質感襯線體 */
+    .card-name {
+      font-family: var(--font-title);
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: var(--text-primary);
+      letter-spacing: 1px;
+    }
+
+    /* 時間字體：簡約無襯線體 */
+    .card-time {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-weight: 400;
+      letter-spacing: 0.5px;
+    }
+
+    /* 留言內容字體：最適行高與字距 */
+    .card-content {
+      font-size: 0.95rem;
+      line-height: 1.75;               /* 放大行高，讀起來不擁擠 */
+      letter-spacing: 0.3px;           /* 輕微加寬內文字距 */
+      color: var(--text-primary);
+      font-weight: 400;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* --- 輪播狀態 1：被選中的高亮卡片 (Highlight) --- */
+    .card.highlight {
+      transform: scale(1.05);
+      border-color: var(--accent-color);
+      box-shadow: 0 12px 35px var(--highlight-glow);
+      opacity: 1 !important;
+      filter: blur(0px) !important;
+      z-index: 10;
+    }
+
+    /* --- 輪播狀態 2：其他未選中的卡片 (Dimmed) --- */
+    .masonry-container.has-active .card:not(.highlight) {
+      opacity: var(--dim-opacity);
+      filter: blur(var(--dim-blur));
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 網頁標題 -->
+  <header>
+    <h1>朋友對我的動態留言板</h1>
+    <p>這裏記錄著大家留給我的溫暖話語</p>
+  </header>
+
+  <main>
+    <!-- 載入中動畫 -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <p>讀取留言中...</p>
+    </div>
+
+    <!-- 留言卡片瀑布流容器 -->
+    <div id="masonry" class="masonry-container"></div>
+  </main>
+
+  <!-- JavaScript 邏輯區塊 -->
+  <script>
+    // ==========================================
+    // 參數設定區
+    // ==========================================
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8BD6MW3G3hzq65AhqJ74fz_FM6Qz_g-DpnPm4C6wSKGVeLxQPTyjIV4iPkf2awygOecOOMgwS8iQb/pub?output=csv';
+    
+    /** 
+     * 輪播切換的時間（毫秒）: 3000 表示 3 秒
+     */
+    const ROTATION_INTERVAL = 3000; 
+
+    let messages = [];
+    let currentIndex = 0;
+    let timerId = null;
+
+    const loadingEl = document.getElementById('loading');
+    const masonryEl = document.getElementById('masonry');
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchMessages();
+    });
+
+    async function fetchMessages() {
+      try {
+        const response = await fetch(CSV_URL);
+        if (!response.ok) throw new Error('網路回應不成功');
+        
+        const csvText = await response.text();
+        messages = parseCSV(csvText);
+
+        loadingEl.style.display = 'none';
+
+        if (messages.length === 0) {
+          masonryEl.innerHTML = '<p style="text-align:center; font-family: var(--font-title);">目前還沒有任何留言喔！</p>';
+          return;
+        }
+
+        renderCards(messages);
+        startCarousel();
+
+      } catch (error) {
+        console.error('抓取資料失敗:', error);
+        loadingEl.innerHTML = '<p style="color:#d9534f;">資料載入失敗，請稍後再試。</p>';
+      }
+    }
+
+    /**
+     * CSV 解析邏輯
+     */
+    function parseCSV(text) {
+      const rows = [];
+      let currentRow = [];
+      let currentCell = '';
+      let insideQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+
+        if (char === '"') {
+          if (insideQuotes && nextChar === '"') {
+            currentCell += '"';
+            i++;
+          } else {
+            insideQuotes = !insideQuotes;
+          }
+        } else if (char === ',' && !insideQuotes) {
+          currentRow.push(currentCell.trim());
+          currentCell = '';
+        } else if ((char === '\r' || char === '\n') && !insideQuotes) {
+          if (char === '\r' && nextChar === '\n') i++;
+          currentRow.push(currentCell.trim());
+          if (currentRow.some(cell => cell.length > 0)) {
+            rows.push(currentRow);
+          }
+          currentRow = [];
+          currentCell = '';
+        } else {
+          currentCell += char;
+        }
+      }
+
+      if (currentCell || currentRow.length > 0) {
+        currentRow.push(currentCell.trim());
+        rows.push(currentRow);
+      }
+
+      if (rows.length <= 1) return [];
+
+      return rows.slice(1).map(row => ({
+        timestamp: row[0] || '',
+        name: row[1] || '無名氏',
+        content: row[2] || ''
+      })).filter(item => item.content !== '');
+    }
+
+    /**
+     * 動態生成 HTML 卡片
+     */
+    function renderCards(dataList) {
+      masonryEl.innerHTML = '';
+
+      dataList.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.classList.add('card');
+        card.dataset.index = index;
+
+        const formattedTime = item.timestamp ? item.timestamp.split(' ')[0] : '';
+
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="card-name">${escapeHTML(item.name)}</span>
+            <span class="card-time">${escapeHTML(formattedTime)}</span>
+          </div>
+          <div class="card-content">${escapeHTML(item.content)}</div>
+        `;
+
+        masonryEl.appendChild(card);
+      });
+    }
+
+    function escapeHTML(str) {
+      return str.replace(/[&<>"']/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[match]));
+    }
+
+    /**
+     * 輪播邏輯
+     */
+    function startCarousel() {
+      const cards = document.querySelectorAll('.card');
+      if (cards.length === 0) return;
+
+      masonryEl.classList.add('has-active');
+      highlightCard(0);
+
+      timerId = setInterval(() => {
+        currentIndex = (currentIndex + 1) % cards.length;
+        highlightCard(currentIndex);
+      }, ROTATION_INTERVAL);
+    }
+
+    function highlightCard(index) {
+      const cards = document.querySelectorAll('.card');
+      
+      cards.forEach((card, i) => {
+        if (i === index) {
+          card.classList.add('highlight');
+          card.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest'
+          });
+        } else {
+          card.classList.remove('highlight');
+        }
+      });
+    }
+  </script>
+</body>
+</html>
