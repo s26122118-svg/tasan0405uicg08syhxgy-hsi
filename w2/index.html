@@ -1,221 +1,309 @@
-// Ensure DOM content is completely loaded before attaching logic
-document.addEventListener('DOMContentLoaded', () => {
-
-    // Default required food options with custom image links
-    const defaultFoodPool = [
-        {
-            name: "鴨肉飯",
-            image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-6ve7cMMSDOzJd1uIZBlenqqzCAcw_cTfhhKSEnawLA&s=10"
-        },
-        {
-            name: "牛肉麵",
-            image: "https://handian.co.uk/wp-content/uploads/2024/04/FF5R0056CF-%E6%99%B6%E8%8F%AF%E7%B6%93%E5%85%B8%E7%B4%85%E7%87%92%E7%89%9B%E8%82%89%E9%BA%B5-Taiwanese-Braised-Beef-Noodles-700g-.jpg"
-        },
-        {
-            name: "蛋餅",
-            image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=800&auto=format&fit=crop"
-        },
-        {
-            name: "越南法棍",
-            image: "https://images.unsplash.com/photo-1626844131082-256783844137?q=80&w=800&auto=format&fit=crop"
-        },
-        {
-            name: "越南河粉",
-            image: "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?q=80&w=800&auto=format&fit=crop"
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>今天吃什麼？隨機抽籤機</title>
+    <!-- 引入外部 CSS 檔案（依規範設定） -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Google 字型 (圓潤可愛字體) 與 FontAwesome 圖示庫 -->
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- CSS 樣式寫在 HTML 同一檔案內（活潑可愛米白風格） -->
+    <style>
+        :root {
+            --bg-color: #FDFBF7;           /* 米白 / 柔和奶白背景 */
+            --card-bg: #FFFFFF;           /* 純白卡片 */
+            --text-main: #5C4A3E;         /* 暖棕色主要文字 */
+            --primary-orange: #FF9248;    /* 活潑暖橘主色 */
+            --primary-orange-hover: #F87D2E;
+            --secondary-cream: #FFF5EA;   /* 柔和奶茶色 */
+            --accent-green: #70B77E;      /* 馬上出發綠色按鈕 */
+            --accent-green-hover: #5BA36A;
+            --shadow: 0 16px 36px rgba(168, 140, 115, 0.12);
         }
-    ];
 
-    // Local State
-    let foodList = [...defaultFoodPool];
-    let isDrawing = false;
-
-    // DOM Elements
-    const mainTitle = document.getElementById('main-title');
-    const subTitle = document.getElementById('sub-title');
-    const drawBtn = document.getElementById('draw-btn');
-    const drawBtnText = document.getElementById('draw-btn-text');
-    const mapBtn = document.getElementById('map-btn');
-    const imageWrapper = document.getElementById('image-wrapper');
-    const foodImage = document.getElementById('food-image');
-    const foodChipsContainer = document.getElementById('food-chips');
-    const poolCount = document.getElementById('pool-count');
-    const addFoodForm = document.getElementById('add-food-form');
-    const newFoodInput = document.getElementById('new-food-input');
-
-    // --- Web Audio API (Cute synthesized sound effects) ---
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    // Play rolling tick sound effect
-    function playTickSound() {
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400 + Math.random() * 200, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.05);
-    }
 
-    // Play winning fanfare sound effect
-    function playWinSound() {
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
+        body {
+            font-family: 'Zen Maru Gothic', sans-serif, "Microsoft JhengHei";
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(#E8DFD5 1.5px, transparent 1.5px),
+                radial-gradient(#E8DFD5 1.5px, var(--bg-color) 1.5px);
+            background-size: 30px 30px;
+            background-position: 0 0, 15px 15px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-main);
+            overflow-x: hidden;
+            position: relative;
         }
-        const now = audioCtx.currentTime;
-        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
-        notes.forEach((freq, idx) => {
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, now + idx * 0.1);
-            gain.gain.setValueAtTime(0.2, now + idx * 0.1);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.25);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start(now + idx * 0.1);
-            osc.stop(now + idx * 0.1 + 0.25);
-        });
-    }
 
-    // Helper to safely sanitize HTML input
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
+        /* 飄浮裝飾插圖圖示 */
+        .decoration-icon {
+            position: absolute;
+            color: #EBDED0;
+            z-index: 1;
+            animation: float 5s ease-in-out infinite alternate;
+        }
+        .dec-1 { font-size: 3.5rem; top: 10%; left: 8%; animation-delay: 0s; }
+        .dec-2 { font-size: 3rem; bottom: 12%; left: 10%; animation-delay: 1.2s; }
+        .dec-3 { font-size: 4rem; top: 15%; right: 9%; animation-delay: 0.6s; }
+        .dec-4 { font-size: 3.2rem; bottom: 15%; right: 12%; animation-delay: 1.8s; }
 
-    // Render food tags/chips in the UI
-    function renderChips() {
-        foodChipsContainer.innerHTML = '';
-        poolCount.textContent = foodList.length;
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            100% { transform: translateY(-15px) rotate(8deg); }
+        }
 
-        foodList.forEach((item, index) => {
-            const chip = document.createElement('div');
-            chip.className = 'chip';
-            chip.innerHTML = `
-                <span>${escapeHtml(item.name)}</span>
-                ${foodList.length > 2 ? `<button type="button" data-index="${index}" class="remove-btn">&times;</button>` : ''}
-            `;
-            foodChipsContainer.appendChild(chip);
-        });
+        /* 中央白卡片容器 */
+        .container {
+            background: var(--card-bg);
+            width: 90%;
+            max-width: 420px;
+            padding: 2.5rem 2rem;
+            border-radius: 32px;
+            box-shadow: var(--shadow);
+            border: 4px solid #F3ECE2;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
 
-        // Attach event listeners for delete buttons
-        document.querySelectorAll('.remove-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-                foodList.splice(idx, 1);
-                renderChips();
+        /* 標籤小裝飾 */
+        .badge {
+            display: inline-block;
+            background: var(--secondary-cream);
+            color: var(--primary-orange);
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            margin-bottom: 1.2rem;
+        }
+
+        /* 大標題 / 抽籤結果顯示區 */
+        .main-title {
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: var(--text-main);
+            margin-bottom: 1.5rem;
+            min-height: 3.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 生動彈跳動畫 (Pop-in Bounce) */
+        .bounce-pop {
+            animation: bouncePop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            color: var(--primary-orange);
+        }
+
+        @keyframes bouncePop {
+            0% { opacity: 0; transform: scale(0.3) rotate(-6deg); }
+            50% { transform: scale(1.15) rotate(3deg); }
+            70% { transform: scale(0.95) rotate(-1deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+
+        /* 網路照片顯示區 */
+        .food-photo-box {
+            width: 100%;
+            height: 220px;
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            border: 3px solid #F3ECE2;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.05);
+        }
+
+        .food-photo-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .food-photo-box img:hover {
+            transform: scale(1.05);
+        }
+
+        /* 按鈕區域 */
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .btn {
+            display: inline-block;
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-radius: 50px;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 6px 16px rgba(255, 146, 72, 0.25);
+        }
+
+        .btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-draw {
+            background-color: var(--primary-orange);
+            color: #FFFFFF;
+        }
+
+        .btn-draw:hover {
+            background-color: var(--primary-orange-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 146, 72, 0.35);
+        }
+
+        .btn-map {
+            background-color: var(--accent-green);
+            color: #FFFFFF;
+            box-shadow: 0 6px 16px rgba(112, 183, 126, 0.25);
+        }
+
+        .btn-map:hover {
+            background-color: var(--accent-green-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(112, 183, 126, 0.35);
+        }
+
+        /* 通用隱藏元件 */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+
+    <!-- 載入外部 JavaScript 檔案（依規範設定 defer） -->
+    <script src="script.js" defer></script>
+
+    <!-- JavaScript 邏輯備份（確保單獨複製這個 HTML 檔也能直接雙擊執行） -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const foodList = [
+                {
+                    name: "鴨肉飯",
+                    image: "https://images.unsplash.com/photo-1514944288352-fffac99f0bdf?q=80&w=800&auto=format&fit=crop"
+                },
+                {
+                    name: "牛肉麵",
+                    image: "https://handian.co.uk/wp-content/uploads/2024/04/FF5R0056CF-%E6%99%B6%E8%8F%AF%E7%B6%93%E5%85%B8%E7%B4%85%E7%87%92%E7%89%9B%E8%82%89%E9%BA%B5-Taiwanese-Braised-Beef-Noodles-700g-.jpg"
+                },
+                {
+                    name: "蛋餅",
+                    image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=600&q=80"
+                },
+                {
+                    name: "越南法棍",
+                    image: "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80"
+                },
+                {
+                    name: "越南河粉",
+                    image: "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&w=600&q=80"
+                }
+            ];
+
+            const mainTitle = document.getElementById('main-title');
+            const drawBtn = document.getElementById('draw-btn');
+            const photoContainer = document.getElementById('photo-container');
+            const foodPhoto = document.getElementById('food-photo');
+            const mapBtn = document.getElementById('map-btn');
+
+            let isRolling = false;
+
+            drawBtn.addEventListener('click', () => {
+                if (isRolling) return;
+                isRolling = true;
+
+                // 隱藏前一次的照片與地圖按鈕，重置標題動畫
+                photoContainer.classList.add('hidden');
+                mapBtn.classList.add('hidden');
+                mainTitle.classList.remove('bounce-pop');
+
+                let count = 0;
+                const totalRolls = 18;
+                const speed = 70;
+
+                // 快速滾動效果
+                const timer = setInterval(() => {
+                    const tempIndex = Math.floor(Math.random() * foodList.length);
+                    mainTitle.textContent = foodList[tempIndex].name;
+                    count++;
+
+                    if (count >= totalRolls) {
+                        clearInterval(timer);
+                        
+                        // 選出最終隨機結果
+                        const result = foodList[Math.floor(Math.random() * foodList.length)];
+                        
+                        // 替換標題並套用生動彈跳動畫
+                        mainTitle.textContent = result.name;
+                        mainTitle.classList.add('bounce-pop');
+
+                        // 載入照片並顯示
+                        foodPhoto.src = result.image;
+                        photoContainer.classList.remove('hidden');
+
+                        // 設定 Google Maps 搜尋連結並顯示「馬上出發」按鈕
+                        mapBtn.href = `https://www.google.com/maps/search/${encodeURIComponent(result.name)}`;
+                        mapBtn.classList.remove('hidden');
+
+                        isRolling = false;
+                    }
+                }, speed);
             });
         });
-    }
+    </script>
+</head>
+<body>
 
-    // Main Random Selection Function
-    function startDraw() {
-        if (isDrawing) return;
-        if (foodList.length === 0) {
-            alert('請至少保留一項美食菜單項目喔！');
-            return;
-        }
+    <!-- 背景米白風格美化裝飾 -->
+    <i class="fa-solid fa-utensils decoration-icon dec-1"></i>
+    <i class="fa-solid fa-bowl-food decoration-icon dec-2"></i>
+    <i class="fa-solid fa-burger decoration-icon dec-3"></i>
+    <i class="fa-solid fa-pizza-slice decoration-icon dec-4"></i>
 
-        isDrawing = true;
+    <!-- 中央控制卡片 -->
+    <div class="container">
+        <div class="badge"><i class="fa-solid fa-cookie-bite"></i> 今天吃什麼？</div>
+        
+        <!-- 大標題 / 抽籤結果處 -->
+        <h1 id="main-title" class="main-title">今天吃什麼？</h1>
 
-        // Button Loading State
-        drawBtn.disabled = true;
-        drawBtnText.textContent = "抽取中...";
+        <!-- 美食照片顯示區（預設隱藏） -->
+        <div id="photo-container" class="food-photo-box hidden">
+            <img id="food-photo" src="" alt="美食照片">
+        </div>
 
-        // Reset title classes & hide previous results
-        mainTitle.classList.remove('animate-pop-in', 'winning');
-        subTitle.textContent = "正在搜尋美食中...";
-        imageWrapper.classList.add('hidden');
-        mapBtn.classList.add('hidden');
+        <!-- 功能按鈕區 -->
+        <div class="btn-group">
+            <button id="draw-btn" class="btn btn-draw">
+                <i class="fa-solid fa-dice"></i> 點我抽籤
+            </button>
 
-        let count = 0;
-        const maxSteps = 25; // Roll speed sequence
-        let intervalTime = 60;
+            <a id="map-btn" class="btn btn-map hidden" href="#" target="_blank" rel="noopener noreferrer">
+                <i class="fa-solid fa-location-dot"></i> 馬上出發 (Google Map)
+            </a>
+        </div>
+    </div>
 
-        // Slot Machine Rolling Loop
-        function rollSlot() {
-            const randomIndex = Math.floor(Math.random() * foodList.length);
-            const currentCandidate = foodList[randomIndex];
-
-            mainTitle.textContent = currentCandidate.name;
-            playTickSound();
-
-            count++;
-            if (count < maxSteps) {
-                intervalTime += Math.floor(count * 1.5);
-                setTimeout(rollSlot, intervalTime);
-            } else {
-                finishDraw(currentCandidate);
-            }
-        }
-
-        rollSlot();
-    }
-
-    // Finish Draw Event
-    function finishDraw(selectedItem) {
-        isDrawing = false;
-
-        // Update Header Titles with Bounce Pop Animation
-        subTitle.textContent = "🎉 今日命定美食！";
-        mainTitle.textContent = selectedItem.name;
-        mainTitle.classList.add('animate-pop-in', 'winning');
-
-        // Display Photo
-        const photoUrl = selectedItem.image || `https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800&auto=format&fit=crop`;
-        foodImage.src = photoUrl;
-        imageWrapper.classList.remove('hidden');
-
-        // Update Google Maps Search Link
-        const encodedFood = encodeURIComponent(selectedItem.name);
-        mapBtn.href = `https://www.google.com/maps/search/?api=1&query=${encodedFood}`;
-        mapBtn.classList.remove('hidden');
-
-        // Restore Button State
-        drawBtn.disabled = false;
-        drawBtnText.textContent = "再抽一次";
-
-        // Play Win Audio & Trigger Festive Confetti
-        playWinSound();
-        triggerConfetti();
-    }
-
-    // Trigger Festive Confetti Effect
-    function triggerConfetti() {
-        if (typeof confetti === 'function') {
-            confetti({
-                particleCount: 80,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ['#F59E0B', '#F97316', '#10B981', '#FBBF24']
-            });
-        }
-    }
-
-    // Attach Click Event Listener to Draw Button
-    drawBtn.addEventListener('click', startDraw);
-
-    // Form submission handler for adding new food items
-    addFoodForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const newName = newFoodInput.value.trim();
-        if (newName) {
-            foodList.push({
-                name: newName,
-                image: `https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800&auto=format&fit=crop`
-            });
-            newFoodInput.value = '';
-            renderChips();
-        }
-    });
-
-    // Initial Chips Rendering
-    renderChips();
-});
+</body>
+</html>
