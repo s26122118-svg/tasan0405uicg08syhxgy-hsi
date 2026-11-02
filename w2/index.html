@@ -1,0 +1,221 @@
+// Ensure DOM content is completely loaded before attaching logic
+document.addEventListener('DOMContentLoaded', () => {
+
+    // Default required food options with custom image links
+    const defaultFoodPool = [
+        {
+            name: "鴨肉飯",
+            image: "https://images.unsplash.com/photo-1514944288352-fffac99f0bdf?q=80&w=800&auto=format&fit=crop"
+        },
+        {
+            name: "牛肉麵",
+            image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?q=80&w=800&auto=format&fit=crop"
+        },
+        {
+            name: "蛋餅",
+            image: "https://images.unsplash.com/photo-1525351484163-7529414344d8?q=80&w=800&auto=format&fit=crop"
+        },
+        {
+            name: "越南法棍",
+            image: "https://images.unsplash.com/photo-1626844131082-256783844137?q=80&w=800&auto=format&fit=crop"
+        },
+        {
+            name: "越南河粉",
+            image: "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?q=80&w=800&auto=format&fit=crop"
+        }
+    ];
+
+    // Local State
+    let foodList = [...defaultFoodPool];
+    let isDrawing = false;
+
+    // DOM Elements
+    const mainTitle = document.getElementById('main-title');
+    const subTitle = document.getElementById('sub-title');
+    const drawBtn = document.getElementById('draw-btn');
+    const drawBtnText = document.getElementById('draw-btn-text');
+    const mapBtn = document.getElementById('map-btn');
+    const imageWrapper = document.getElementById('image-wrapper');
+    const foodImage = document.getElementById('food-image');
+    const foodChipsContainer = document.getElementById('food-chips');
+    const poolCount = document.getElementById('pool-count');
+    const addFoodForm = document.getElementById('add-food-form');
+    const newFoodInput = document.getElementById('new-food-input');
+
+    // --- Web Audio API (Cute synthesized sound effects) ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Play rolling tick sound effect
+    function playTickSound() {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400 + Math.random() * 200, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.05);
+    }
+
+    // Play winning fanfare sound effect
+    function playWinSound() {
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        const now = audioCtx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.1);
+            gain.gain.setValueAtTime(0.2, now + idx * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.1 + 0.25);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + idx * 0.1);
+            osc.stop(now + idx * 0.1 + 0.25);
+        });
+    }
+
+    // Helper to safely sanitize HTML input
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Render food tags/chips in the UI
+    function renderChips() {
+        foodChipsContainer.innerHTML = '';
+        poolCount.textContent = foodList.length;
+
+        foodList.forEach((item, index) => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.innerHTML = `
+                <span>${escapeHtml(item.name)}</span>
+                ${foodList.length > 2 ? `<button type="button" data-index="${index}" class="remove-btn">&times;</button>` : ''}
+            `;
+            foodChipsContainer.appendChild(chip);
+        });
+
+        // Attach event listeners for delete buttons
+        document.querySelectorAll('.remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.getAttribute('data-index'));
+                foodList.splice(idx, 1);
+                renderChips();
+            });
+        });
+    }
+
+    // Main Random Selection Function
+    function startDraw() {
+        if (isDrawing) return;
+        if (foodList.length === 0) {
+            alert('請至少保留一項美食菜單項目喔！');
+            return;
+        }
+
+        isDrawing = true;
+
+        // Button Loading State
+        drawBtn.disabled = true;
+        drawBtnText.textContent = "抽取中...";
+
+        // Reset title classes & hide previous results
+        mainTitle.classList.remove('animate-pop-in', 'winning');
+        subTitle.textContent = "正在搜尋美食中...";
+        imageWrapper.classList.add('hidden');
+        mapBtn.classList.add('hidden');
+
+        let count = 0;
+        const maxSteps = 25; // Roll speed sequence
+        let intervalTime = 60;
+
+        // Slot Machine Rolling Loop
+        function rollSlot() {
+            const randomIndex = Math.floor(Math.random() * foodList.length);
+            const currentCandidate = foodList[randomIndex];
+
+            mainTitle.textContent = currentCandidate.name;
+            playTickSound();
+
+            count++;
+            if (count < maxSteps) {
+                intervalTime += Math.floor(count * 1.5);
+                setTimeout(rollSlot, intervalTime);
+            } else {
+                finishDraw(currentCandidate);
+            }
+        }
+
+        rollSlot();
+    }
+
+    // Finish Draw Event
+    function finishDraw(selectedItem) {
+        isDrawing = false;
+
+        // Update Header Titles with Bounce Pop Animation
+        subTitle.textContent = "🎉 今日命定美食！";
+        mainTitle.textContent = selectedItem.name;
+        mainTitle.classList.add('animate-pop-in', 'winning');
+
+        // Display Photo
+        const photoUrl = selectedItem.image || `https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800&auto=format&fit=crop`;
+        foodImage.src = photoUrl;
+        imageWrapper.classList.remove('hidden');
+
+        // Update Google Maps Search Link
+        const encodedFood = encodeURIComponent(selectedItem.name);
+        mapBtn.href = `https://www.google.com/maps/search/?api=1&query=${encodedFood}`;
+        mapBtn.classList.remove('hidden');
+
+        // Restore Button State
+        drawBtn.disabled = false;
+        drawBtnText.textContent = "再抽一次";
+
+        // Play Win Audio & Trigger Festive Confetti
+        playWinSound();
+        triggerConfetti();
+    }
+
+    // Trigger Festive Confetti Effect
+    function triggerConfetti() {
+        if (typeof confetti === 'function') {
+            confetti({
+                particleCount: 80,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#F59E0B', '#F97316', '#10B981', '#FBBF24']
+            });
+        }
+    }
+
+    // Attach Click Event Listener to Draw Button
+    drawBtn.addEventListener('click', startDraw);
+
+    // Form submission handler for adding new food items
+    addFoodForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newName = newFoodInput.value.trim();
+        if (newName) {
+            foodList.push({
+                name: newName,
+                image: `https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=800&auto=format&fit=crop`
+            });
+            newFoodInput.value = '';
+            renderChips();
+        }
+    });
+
+    // Initial Chips Rendering
+    renderChips();
+});
